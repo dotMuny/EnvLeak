@@ -53,7 +53,7 @@ envleak scan . --format json | jq -r 'select(.confidence == "high") | "\(.path):
 |---|---|
 | `0` | No findings at or above `--fail-on`. |
 | `1` | At least one finding at or above `--fail-on`. |
-| `2` | envleak failed to run: bad flags, unreadable config, not a Git repository. |
+| `2` | EnvLeak failed to run: bad flags, unreadable config, not a Git repository. |
 
 A `2` always means something needs fixing in the invocation. Treat `1` as "the
 tool worked and found something".

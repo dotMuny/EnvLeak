@@ -74,7 +74,7 @@ make fmt test lint docs
 ```
 
 CI additionally runs the race detector, a short fuzzing pass on the rule parser
-and the entropy engine, a Docker build, and envleak against its own working tree
+and the entropy engine, a Docker build, and EnvLeak against its own working tree
 and history. Coverage across `internal/` must stay above 80%.
 
 ## Reporting a vulnerability

@@ -1,6 +1,6 @@
 # Security policy
 
-## Reporting a vulnerability in envleak
+## Reporting a vulnerability in EnvLeak
 
 Open a [security advisory](https://github.com/dotMuny/EnvLeak/security/advisories/new).
 Please do not open a public issue for a vulnerability.
@@ -10,7 +10,7 @@ it is not one within two weeks.
 
 ## What counts
 
-envleak is a local static analysis tool. It reads files and Git objects, and it
+EnvLeak is a local static analysis tool. It reads files and Git objects, and it
 writes reports. It makes no network requests at all. So the interesting attack
 surface is what happens when it is pointed at a hostile repository:
 
@@ -19,7 +19,7 @@ surface is what happens when it is pointed at a hostile repository:
   exactly this; a reproducer is very welcome.
 * A crafted `.envleak.yml`, `extra_rules` file or baseline that causes anything
   worse than a parse error.
-* A path in a repository that makes envleak read or write outside the scan root.
+* A path in a repository that makes EnvLeak read or write outside the scan root.
 * Any way to get a secret into output that the operator did not ask for with
   `--show-secrets` — including into `line_sample`, the baseline file, or a
   SARIF message.
@@ -31,14 +31,14 @@ prints them into a CI log has made the problem worse.
 
 * False positives and false negatives in the rule catalogue. Those are bugs, and
   ordinary issues are the right place for them.
-* envleak reporting a secret you consider public. Use the allowlist.
+* EnvLeak reporting a secret you consider public. Use the allowlist.
 * Resource use proportional to repository size. Use `--max-file-size` and
   `--concurrency`.
 
 ## About the credentials in this repository
 
 Every credential in the rule examples, in `testdata/`, and in the tests is
-synthetic and was never valid. The GitHub tokens are generated with envleak's
+synthetic and was never valid. The GitHub tokens are generated with EnvLeak's
 own base62 CRC32 routine so that the checksum validator has something real to
 verify against — they satisfy the format and correspond to no account.
 

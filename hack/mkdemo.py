@@ -172,7 +172,7 @@ def main() -> int:
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" '
-        f'font-size="13" role="img" aria-label="envleak scanning a repository and reporting four leaked secrets">',
+        f'font-size="13" role="img" aria-label="EnvLeak scanning a repository and reporting four leaked secrets">',
         "<style>",
         ":root{--bg:#11151c;--fg:#c9d1d9;--dim:#6e7781;--red:#ff7b72;--green:#7ee787;"
         "--yellow:#e3b341;--blue:#79c0ff;--cyan:#56d4dd;--magenta:#d2a8ff;--chrome:#1b2129;--border:#30363d}",
@@ -190,7 +190,7 @@ def main() -> int:
         '<circle cx="20" cy="17" r="5.5" fill="#ff5f56"/>',
         '<circle cx="40" cy="17" r="5.5" fill="#ffbd2e"/>',
         '<circle cx="60" cy="17" r="5.5" fill="#27c93f"/>',
-        f'<text x="{width // 2}" y="21" text-anchor="middle" class="dim" font-size="11">envleak</text>',
+        f'<text x="{width // 2}" y="21" text-anchor="middle" class="dim" font-size="11">EnvLeak</text>',
     ]
 
     for i, spans in enumerate(lines):

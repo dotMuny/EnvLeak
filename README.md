@@ -1,9 +1,9 @@
-# envleak
+# EnvLeak
 
 **Finds credentials that were committed to a Git repository — in the working tree and in every commit that ever existed — and tells you which ones are still live.**
 
 <p align="center">
-  <img src="docs/demo/envleak.svg" alt="envleak scanning a repository and reporting four leaked secrets" width="820">
+  <img src="docs/demo/envleak.svg" alt="EnvLeak scanning a repository and reporting four leaked secrets" width="820">
 </p>
 
 <p align="center">
@@ -34,7 +34,7 @@ Three engines run together, and each finding says which ones agreed:
 
 The result is a `confidence` field that means something. On a deliberately
 adversarial corpus — 16 files, 41 strings that look exactly like credentials and
-none that are — envleak reports **zero findings at any confidence level**, and a
+none that are — EnvLeak reports **zero findings at any confidence level**, and a
 test fails the build if that ever regresses.
 
 ## Installation
@@ -144,7 +144,7 @@ const fixture = "AKIA2E0A8F3B244C9986"
 A directive works on its own line or the line above, in any language's comment
 syntax — only the directive text is matched, not the comment marker.
 
-### Adopting envleak in a repository that already has findings
+### Adopting EnvLeak in a repository that already has findings
 
 ```bash
 envleak baseline --with-history   # writes .envleak-baseline.json
@@ -196,7 +196,7 @@ repos:
 ```
 
 Or without the framework: `envleak install-hook` writes `.git/hooks/pre-commit`
-directly. The hook exits 0 if envleak is not on PATH, so it never blocks a
+directly. The hook exits 0 if EnvLeak is not on PATH, so it never blocks a
 colleague who has not installed it.
 
 ### Docker
@@ -429,7 +429,7 @@ Five direct, each one load-bearing:
 
 | Module | Why |
 |---|---|
-| `github.com/go-git/go-git/v5` | Git access without shelling out. Also provides the `gitignore` matcher, so envleak's idea of "ignored" is exactly git's. |
+| `github.com/go-git/go-git/v5` | Git access without shelling out. Also provides the `gitignore` matcher, so EnvLeak's idea of "ignored" is exactly git's. |
 | `github.com/spf13/cobra` (+ `pflag`) | The command tree, flag parsing and shell completion. |
 | `gopkg.in/yaml.v3` | The embedded rule catalogue and `.envleak.yml`. |
 | `github.com/stretchr/testify` | Test assertions. Test-only. |
@@ -480,10 +480,10 @@ string. Formatters decide *how* something is printed, never *what* is reported.
 
 Every credential in this repository — in the rule examples, the corpora and the
 tests — is synthetic and was never valid. The GitHub tokens are generated with
-envleak's own base62 CRC32 routine so that the checksum validator has something
+EnvLeak's own base62 CRC32 routine so that the checksum validator has something
 real to verify.
 
-Found a vulnerability in envleak itself? Open a
+Found a vulnerability in EnvLeak itself? Open a
 [security advisory](https://github.com/dotMuny/EnvLeak/security/advisories/new)
 rather than an issue.
 
