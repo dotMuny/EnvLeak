@@ -1,0 +1,42 @@
+# envleak scanning itself with its own composite action, which doubles as the
+# copy-paste example in the README.
+name: secret-scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  envleak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Scan the working tree
+        uses: ./
+        with:
+          path: .
+          format: sarif
+          output: envleak.sarif
+          fail-on: high
+
+      - name: Scan the full history
+        uses: ./
+        with:
+          mode: history
+          format: sarif
+          output: envleak-history.sarif
+          fail-on: high

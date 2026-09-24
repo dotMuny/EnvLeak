@@ -1,0 +1,142 @@
+name: envleak
+description: Scan a repository for leaked secrets and upload the results to GitHub Code Scanning.
+author: envleak contributors
+
+branding:
+  icon: key
+  color: red
+
+inputs:
+  path:
+    description: Directory to scan, relative to the workspace.
+    required: false
+    default: "."
+  mode:
+    description: 'What to scan: "scan" for the working tree, "history" for every commit.'
+    required: false
+    default: scan
+  format:
+    description: 'Output format: text, json, sarif or junit.'
+    required: false
+    default: sarif
+  output:
+    description: File to write the report to. Defaults to envleak.sarif for the sarif format.
+    required: false
+    default: envleak.sarif
+  fail-on:
+    description: 'Fail the job when a finding is at least this severe: critical, high, medium, low or none.'
+    required: false
+    default: medium
+  min-confidence:
+    description: 'Drop findings below this confidence: high, medium or low.'
+    required: false
+    default: low
+  baseline:
+    description: Baseline file of already-accepted findings. Leave empty to use .envleak-baseline.json if present.
+    required: false
+    default: ""
+  config:
+    description: Path to .envleak.yml. Leave empty to look for one at the scan root.
+    required: false
+    default: ""
+  upload-sarif:
+    description: "Upload the SARIF report to GitHub Code Scanning. Requires the security-events: write permission."
+    required: false
+    default: "true"
+  version:
+    description: envleak version to install, or "latest".
+    required: false
+    default: latest
+  extra-args:
+    description: Additional flags passed verbatim to envleak.
+    required: false
+    default: ""
+
+outputs:
+  findings:
+    description: Number of findings reported.
+    value: ${{ steps.scan.outputs.findings }}
+  report:
+    description: Path to the generated report.
+    value: ${{ steps.scan.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install envleak
+      shell: bash
+      env:
+        ENVLEAK_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        if [ "${ENVLEAK_VERSION}" = "latest" ]; then
+          ref="@latest"
+        else
+          ref="@${ENVLEAK_VERSION}"
+        fi
+        go install "github.com/dotMuny/EnvLeak/cmd/envleak${ref}"
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+    - name: Run envleak
+      id: scan
+      shell: bash
+      env:
+        ENVLEAK_PATH: ${{ inputs.path }}
+        ENVLEAK_MODE: ${{ inputs.mode }}
+        ENVLEAK_FORMAT: ${{ inputs.format }}
+        ENVLEAK_OUTPUT: ${{ inputs.output }}
+        ENVLEAK_FAIL_ON: ${{ inputs.fail-on }}
+        ENVLEAK_MIN_CONFIDENCE: ${{ inputs.min-confidence }}
+        ENVLEAK_BASELINE: ${{ inputs.baseline }}
+        ENVLEAK_CONFIG: ${{ inputs.config }}
+        ENVLEAK_EXTRA: ${{ inputs.extra-args }}
+      run: |
+        set -uo pipefail
+
+        args=("${ENVLEAK_MODE}" "${ENVLEAK_PATH}")
+        args+=(--format "${ENVLEAK_FORMAT}")
+        args+=(--output "${ENVLEAK_OUTPUT}")
+        args+=(--fail-on "${ENVLEAK_FAIL_ON}")
+        args+=(--min-confidence "${ENVLEAK_MIN_CONFIDENCE}")
+        args+=(--no-color)
+        [ -n "${ENVLEAK_BASELINE}" ] && args+=(--baseline "${ENVLEAK_BASELINE}")
+        [ -n "${ENVLEAK_CONFIG}" ]   && args+=(--config "${ENVLEAK_CONFIG}")
+        # shellcheck disable=SC2206
+        [ -n "${ENVLEAK_EXTRA}" ] && args+=(${ENVLEAK_EXTRA})
+
+        echo "::group::envleak ${args[*]}"
+        envleak "${args[@]}"
+        status=$?
+        echo "::endgroup::"
+
+        echo "report=${ENVLEAK_OUTPUT}" >> "$GITHUB_OUTPUT"
+
+        findings=0
+        if [ -f "${ENVLEAK_OUTPUT}" ]; then
+          case "${ENVLEAK_FORMAT}" in
+            json)  findings=$(wc -l < "${ENVLEAK_OUTPUT}" | tr -d ' ') ;;
+            sarif) findings=$(grep -c '"ruleId"' "${ENVLEAK_OUTPUT}" || true) ;;
+          esac
+        fi
+        echo "findings=${findings}" >> "$GITHUB_OUTPUT"
+
+        # Exit 2 means envleak itself failed; that always fails the job.
+        if [ "$status" -eq 2 ]; then
+          echo "::error::envleak failed to run"
+          exit 2
+        fi
+        # Re-print the findings so they are visible without opening the
+        # Security tab, then propagate the exit status.
+        if [ "$status" -eq 1 ]; then
+          echo "::warning::envleak found ${findings} secret(s) at or above --fail-on=${ENVLEAK_FAIL_ON}"
+        fi
+        exit "$status"
+
+    - name: Upload SARIF to code scanning
+      # Runs even when the scan failed the job: the whole point is to get the
+      # findings into the Security tab.
+      if: always() && inputs.upload-sarif == 'true' && inputs.format == 'sarif'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.output }}
+        category: envleak

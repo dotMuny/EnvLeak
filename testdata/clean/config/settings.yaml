@@ -1,0 +1,14 @@
+database:
+  url: postgres://app:${DB_PASSWORD}@db:5432/app
+  pool_size: 20
+redis:
+  url: redis://cache:6379/0
+auth:
+  jwt_secret_env: JWT_SIGNING_SECRET
+  session_secret: "{{ env \"SESSION_SECRET\" }}"
+aws:
+  region: eu-west-1
+  access_key_id_env: AWS_ACCESS_KEY_ID
+observability:
+  datadog_api_key: ${DATADOG_API_KEY}
+  sentry_dsn: https://<key>@o0.ingest.sentry.io/0

@@ -1,0 +1,992 @@
+# envleak rule catalogue.
+#
+# Every rule is: a cheap keyword prefilter, a RE2 regex, and metadata telling
+# the aggregator how much to trust a bare pattern hit. Regexes are Go RE2 —
+# no lookaround, no backreferences.
+#
+# Fields
+#   id                 stable identifier, used in allowlists and SARIF
+#   description        one line, shown in reports and docs/rules.md
+#   severity           critical | high | medium | low
+#   confidence         what a bare pattern match is worth: high | medium | low
+#   keywords           lowercase substrings; the line must contain one of them
+#   regex              RE2 pattern
+#   secret_group       capture group holding the secret (0 = whole match)
+#   entropy_threshold  if > 0, the entropy engine must confirm the secret
+#   validator          name of a checksum/structure validator in internal/detect
+#   examples           positive: must produce a finding for this rule
+#                      negative: must not. Both are asserted by TestRuleExamples.
+#
+# Regexes use \x27 for a literal apostrophe so the YAML can stay single-quoted.
+version: 1
+rules:
+
+  # ---------------------------------------------------------------- AWS -----
+  - id: aws-access-key-id
+    description: AWS access key ID
+    severity: critical
+    confidence: high
+    keywords: [akia, asia, abia, acca, a3t]
+    regex: '\b((?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16})\b'
+    secret_group: 1
+    tags: [aws, cloud]
+    examples:
+      positive:
+        - 'aws_access_key_id = AKIA2E0A8F3B244C9986'
+        - 'export AWS_ACCESS_KEY_ID=ASIAQ4W7TJ2KPLN6VRDZ'
+      negative:
+        - 'AKIAIOSFODNN7EXAMPLE'
+        - 'arn:aws:iam::123456789012:role/akia-reader'
+
+  - id: aws-secret-access-key
+    description: AWS secret access key assigned to an aws-flavoured identifier
+    severity: critical
+    confidence: high
+    keywords: [aws_secret, aws-secret, awssecret, secret_access_key, secretaccesskey]
+    regex: '(?i)aws[_.\-]?secret[_.\-]?access[_.\-]?key["\x27 ]*[:=]["\x27 ]*([A-Za-z0-9/+=]{40})'
+    secret_group: 1
+    entropy_threshold: 4.0
+    tags: [aws, cloud]
+    examples:
+      positive:
+        - 'aws_secret_access_key = kQ7vTz2mR9dXpL4wNbGs8yJhCe5AuiZr3VoFxMt1'
+      negative:
+        - 'aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
+        - 'aws_secret_access_key is stored in Vault'
+
+  - id: aws-session-token
+    description: AWS temporary session token
+    severity: high
+    confidence: high
+    keywords: [aws_session_token, aws-session-token, awssessiontoken]
+    regex: '(?i)aws[_.\-]?session[_.\-]?token["\x27 ]*[:=]["\x27 ]*([A-Za-z0-9/+=]{100,})'
+    secret_group: 1
+    entropy_threshold: 4.0
+    tags: [aws, cloud]
+    examples:
+      positive:
+        - 'AWS_SESSION_TOKEN=IQoJb3JpZ2luX2VjEHkaCWV1LXdlc3QtMSJHMEUCIQDk9pR2xVbN7mYqLzTgJc3FhWsPuXeA4vKdNrBiHtOwZgIgYcQmRv8sNaLpXzUeKdT2jWfBhCyMoIrnAXlqQvEtZuk'
+      negative:
+        - 'AWS_SESSION_TOKEN=<your-session-token>'
+        - 'aws_session_token: short'
+
+  # ------------------------------------------------------------- GitHub -----
+  - id: github-pat-classic
+    description: GitHub classic personal access token
+    severity: critical
+    confidence: high
+    keywords: [ghp_]
+    regex: '\b(ghp_[A-Za-z0-9]{36})\b'
+    secret_group: 1
+    validator: github-crc32
+    tags: [github, vcs]
+    examples:
+      positive:
+        - 'GITHUB_TOKEN=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'
+      negative:
+        - 'ghp_short'
+        - 'see https://docs.github.com/ for ghp_ tokens'
+
+  - id: github-oauth-token
+    description: GitHub OAuth access token
+    severity: critical
+    confidence: high
+    keywords: [gho_]
+    regex: '\b(gho_[A-Za-z0-9]{36})\b'
+    secret_group: 1
+    validator: github-crc32
+    tags: [github, vcs]
+    examples:
+      positive:
+        - 'token: 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'
+      negative:
+        - 'gho_notalongenoughtoken'
+
+  - id: github-app-token
+    description: GitHub App user-to-server or server-to-server token
+    severity: critical
+    confidence: high
+    keywords: [ghu_, ghs_]
+    regex: '\b(gh[us]_[A-Za-z0-9]{36})\b'
+    secret_group: 1
+    validator: github-crc32
+    tags: [github, vcs]
+    examples:
+      positive:
+        - 'installation token ghs_iLG0HSy3Hl8qlOitKGS7dPDBTBy8tQ1aBHQr'
+      negative:
+        - 'ghs_'
+
+  - id: github-refresh-token
+    description: GitHub OAuth refresh token
+    severity: high
+    confidence: high
+    keywords: [ghr_]
+    regex: '\b(ghr_[A-Za-z0-9]{36})\b'
+    secret_group: 1
+    validator: github-crc32
+    tags: [github, vcs]
+    examples:
+      positive:
+        - 'refresh=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'
+      negative:
+        - 'ghr_deadbeef'
+
+  - id: github-pat-fine-grained
+    description: GitHub fine-grained personal access token
+    severity: critical
+    confidence: high
+    keywords: [github_pat_]
+    regex: '\b(github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59})\b'
+    secret_group: 1
+    validator: github-pat-structure
+    tags: [github, vcs]
+    examples:
+      positive:
+        - 'GH_PAT=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'
+      negative:
+        - 'github_pat_tooshort_value'
+
+  # ------------------------------------------------------------- GitLab -----
+  - id: gitlab-pat
+    description: GitLab personal access token
+    severity: critical
+    confidence: high
+    keywords: [glpat-]
+    regex: '\b(glpat-[A-Za-z0-9_\-]{20})\b'
+    secret_group: 1
+    tags: [gitlab, vcs]
+    examples:
+      positive:
+        - 'CI_TOKEN=glpat-kR7mQz2XvNb8LcYt4WpJ'
+      negative:
+        - 'glpat-short'
+
+  - id: gitlab-runner-token
+    description: GitLab runner registration token
+    severity: high
+    confidence: high
+    keywords: [glrt-, gr1348941]
+    regex: '\b((?:glrt-|GR1348941)[A-Za-z0-9_\-]{20})\b'
+    secret_group: 1
+    tags: [gitlab, ci]
+    examples:
+      positive:
+        - 'runner_token = GR1348941kR7mQz2XvNb8LcYt4WpJ'
+      negative:
+        - 'GR1348941'
+
+  - id: gitlab-pipeline-trigger-token
+    description: GitLab pipeline trigger token
+    severity: high
+    confidence: high
+    keywords: [glptt-]
+    regex: '\b(glptt-[0-9a-f]{40})\b'
+    secret_group: 1
+    tags: [gitlab, ci]
+    examples:
+      positive:
+        - 'trigger: glptt-3f9a1c7e5b2d8460af13ce92b7d045e6c81af239'
+      negative:
+        - 'glptt-notahexdigest'
+
+  # -------------------------------------------------------------- Slack -----
+  - id: slack-bot-token
+    description: Slack bot user OAuth token
+    severity: high
+    confidence: high
+    keywords: [xoxb-]
+    regex: '\b(xoxb-[0-9]{10,13}-[0-9]{10,13}-[A-Za-z0-9]{24,34})\b'
+    secret_group: 1
+    tags: [slack, chat]
+    examples:
+      positive:
+        - 'SLACK_BOT_TOKEN=xoxb-2947183045721-2948172630554-kR7mQz2XvNb8LcYt4WpJd6Sg'
+      negative:
+        - 'xoxb-1-1-short'
+
+  - id: slack-user-token
+    description: Slack user OAuth token
+    severity: high
+    confidence: high
+    keywords: [xoxp-, xoxe-]
+    regex: '\b(xox[pe]-[0-9]{10,13}-[0-9]{10,13}-[0-9]{10,13}-[a-f0-9]{32})\b'
+    secret_group: 1
+    tags: [slack, chat]
+    examples:
+      positive:
+        - 'xoxp-2947183045721-2948172630554-2947183045733-3f9a1c7e5b2d8460af13ce92b7d045e6'
+      negative:
+        - 'xoxp-invalid-token'
+
+  - id: slack-legacy-token
+    description: Slack legacy API or workspace token
+    severity: high
+    confidence: high
+    keywords: [xoxa-, xoxr-, xoxs-]
+    regex: '\b(xox[ars]-(?:[0-9]+-)+[A-Za-z0-9]{24,34})\b'
+    secret_group: 1
+    tags: [slack, chat]
+    examples:
+      positive:
+        - 'legacy = xoxa-2947183045721-2948172630554-kR7mQz2XvNb8LcYt4WpJd6Sg'
+      negative:
+        - 'xoxa-2-'
+
+  - id: slack-webhook-url
+    description: Slack incoming webhook URL
+    severity: medium
+    confidence: high
+    keywords: [hooks.slack.com]
+    regex: '(https://hooks\.slack\.com/services/T[A-Za-z0-9_]{8,12}/B[A-Za-z0-9_]{8,12}/[A-Za-z0-9_]{23,25})'
+    secret_group: 1
+    tags: [slack, chat, webhook]
+    examples:
+      positive:
+        - 'WEBHOOK=https://hooks.slack.com/services/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'
+      negative:
+        - 'https://hooks.slack.com/services/'
+
+  # ------------------------------------------------------------- Stripe -----
+  - id: stripe-live-secret-key
+    description: Stripe live mode secret key
+    severity: critical
+    confidence: high
+    keywords: [sk_live_, rk_live_]
+    regex: '\b((?:sk|rk)_live_[A-Za-z0-9]{24,99})\b'
+    secret_group: 1
+    tags: [stripe, payments]
+    examples:
+      positive:
+        - 'STRIPE_KEY=sk_live_kR7mQz2XvNb8LcYt4WpJd6Sg'
+      negative:
+        - 'sk_live_short'
+
+  - id: stripe-test-secret-key
+    description: Stripe test mode secret key (low impact, still a leak)
+    severity: low
+    confidence: high
+    keywords: [sk_test_, rk_test_]
+    regex: '\b((?:sk|rk)_test_[A-Za-z0-9]{24,99})\b'
+    secret_group: 1
+    tags: [stripe, payments]
+    examples:
+      positive:
+        - 'STRIPE_TEST=sk_test_kR7mQz2XvNb8LcYt4WpJd6Sg'
+      negative:
+        - 'sk_test_'
+
+  - id: stripe-publishable-key
+    description: Stripe publishable key (not secret, but leaks account identity)
+    severity: low
+    confidence: high
+    keywords: [pk_live_]
+    regex: '\b(pk_live_[A-Za-z0-9]{24,99})\b'
+    secret_group: 1
+    tags: [stripe, payments]
+    examples:
+      positive:
+        - 'pk_live_kR7mQz2XvNb8LcYt4WpJd6Sg'
+      negative:
+        - 'pk_live_'
+
+  # ------------------------------------------------------------- Google -----
+  - id: google-api-key
+    description: Google Cloud / Maps API key
+    severity: high
+    confidence: high
+    keywords: [aiza]
+    regex: '\b(AIza[A-Za-z0-9_\-]{35})\b'
+    secret_group: 1
+    tags: [google, cloud]
+    examples:
+      positive:
+        - 'MAPS_KEY=AIzauecA90DyzJ9jShMmI4ErLALzgu6ywwPscBn'
+      negative:
+        - 'AIzaSy-too-short'
+
+  - id: google-oauth-client-secret
+    description: Google OAuth 2.0 client secret
+    severity: critical
+    confidence: high
+    keywords: [gocspx-]
+    regex: '\b(GOCSPX-[A-Za-z0-9_\-]{28})\b'
+    secret_group: 1
+    tags: [google, cloud, oauth]
+    examples:
+      positive:
+        - 'client_secret: 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'
+      negative:
+        - 'GOCSPX-short'
+
+  - id: gcp-service-account-key
+    description: GCP service account JSON key with an embedded private key
+    severity: critical
+    confidence: high
+    keywords: ['"private_key"', 'service_account']
+    regex: '"private_key"\s*:\s*"-----BEGIN [A-Z ]*PRIVATE KEY-----'
+    secret_group: 0
+    tags: [google, cloud, pem]
+    examples:
+      positive:
+        - '"private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADAN"'
+      negative:
+        - '"private_key": "$(cat /run/secrets/key.pem)"'
+
+  # ---------------------------------------------------------------- AI ------
+  - id: openai-api-key
+    description: OpenAI API key (project or user scoped)
+    severity: critical
+    confidence: high
+    keywords: [t3blbkfj]
+    regex: '\b(sk-[A-Za-z0-9_\-]{10,}T3BlbkFJ[A-Za-z0-9_\-]{10,})\b'
+    secret_group: 1
+    tags: [ai, saas]
+    examples:
+      positive:
+        - 'OPENAI_API_KEY=sk-proj-kR7mQz2XvNb8LcYtT3BlbkFJ4WpJd6SgHa1FuE3Zi'
+      negative:
+        - 'OPENAI_API_KEY=sk-proj-REDACTED'
+
+  - id: openai-api-key-legacy
+    description: Legacy OpenAI API key (sk- followed by 48 base62 characters)
+    severity: critical
+    confidence: medium
+    keywords: [openai, 'sk-']
+    regex: '\b(sk-[A-Za-z0-9]{48})\b'
+    secret_group: 1
+    entropy_threshold: 4.3
+    tags: [ai, saas]
+    examples:
+      positive:
+        - 'openai.api_key = "sk-kR7mQz2XvNb8LcYt4WpJd6SgHa1FuE3ZiOr9TpKwLmXbVzNc"'
+      negative:
+        - 'openai.api_key = "sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"'
+
+  - id: anthropic-api-key
+    description: Anthropic API key
+    severity: critical
+    confidence: high
+    keywords: [sk-ant-]
+    regex: '\b(sk-ant-(?:api|admin)[0-9]{2}-[A-Za-z0-9_\-]{80,120})\b'
+    secret_group: 1
+    tags: [ai, saas]
+    examples:
+      positive:
+        - 'ANTHROPIC_API_KEY=sk-ant-api03-kR7mQz2XvNb8LcYt4WpJd6SgHa1FuE3ZiOr9TpKwLmXbVzNcQdRfYgUhIjOkPlAsDfGhJkLmZxCvBnMqWeRtYu'
+      negative:
+        - 'ANTHROPIC_API_KEY=sk-ant-api03-...'
+
+  # ------------------------------------------------------- Communications ---
+  - id: twilio-api-key
+    description: Twilio API key SID
+    severity: high
+    confidence: medium
+    keywords: [twilio, 'sk']
+    regex: '\b(SK[0-9a-f]{32})\b'
+    secret_group: 1
+    entropy_threshold: 3.2
+    tags: [twilio, saas]
+    examples:
+      positive:
+        - 'twilio_api_key = SK3f9a1c7e5b2d8460af13ce92b7d045e6'
+      negative:
+        - 'twilio sid SK00000000000000000000000000000000'
+
+  - id: twilio-account-sid
+    description: Twilio account SID (identifier, pairs with an auth token)
+    severity: low
+    confidence: medium
+    keywords: [twilio, 'ac']
+    regex: '\b(AC[0-9a-f]{32})\b'
+    secret_group: 1
+    entropy_threshold: 3.2
+    tags: [twilio, saas]
+    examples:
+      positive:
+        - 'TWILIO_ACCOUNT_SID=AC3f9a1c7e5b2d8460af13ce92b7d045e6'
+      negative:
+        - 'twilio account AC11111111111111111111111111111111'
+
+  - id: sendgrid-api-key
+    description: SendGrid API key
+    severity: critical
+    confidence: high
+    keywords: ['sg.']
+    regex: '\b(SG\.[A-Za-z0-9_\-]{22}\.[A-Za-z0-9_\-]{43})\b'
+    secret_group: 1
+    tags: [email, saas]
+    examples:
+      positive:
+        - 'SENDGRID_API_KEY=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'
+      negative:
+        - 'SG.short.key'
+
+  - id: mailgun-api-key
+    description: Mailgun private API key
+    severity: high
+    confidence: high
+    keywords: ['key-', mailgun]
+    regex: '\b(key-[0-9a-f]{32})\b'
+    secret_group: 1
+    entropy_threshold: 3.2
+    tags: [email, saas]
+    examples:
+      positive:
+        - 'MAILGUN_KEY=key-3f9a1c7e5b2d8460af13ce92b7d045e6'
+      negative:
+        - 'MAILGUN_KEY=key-3f9a1c7e5b2d8460af13ce'
+
+  - id: mailchimp-api-key
+    description: Mailchimp API key
+    severity: high
+    confidence: high
+    keywords: [mailchimp, '-us']
+    regex: '\b([0-9a-f]{32}-us[0-9]{1,2})\b'
+    secret_group: 1
+    tags: [email, saas]
+    examples:
+      positive:
+        - 'MAILCHIMP_KEY=3f9a1c7e5b2d8460af13ce92b7d045e6-us14'
+      negative:
+        - 'mailchimp datacenter us14'
+
+  - id: telegram-bot-token
+    description: Telegram bot API token
+    severity: high
+    confidence: high
+    keywords: [':aa', telegram]
+    regex: '\b([0-9]{8,10}:AA[A-Za-z0-9_\-]{32,34})\b'
+    secret_group: 1
+    tags: [chat, saas]
+    examples:
+      positive:
+        - 'TELEGRAM_TOKEN=294718304:AAkR7mQz2XvNb8LcYt4WpJd6SgHa1FuE3Zi'
+      negative:
+        - 'telegram bot id 294718304'
+
+  - id: discord-bot-token
+    description: Discord bot token
+    severity: high
+    confidence: medium
+    keywords: [discord]
+    regex: '\b([MNO][A-Za-z0-9_\-]{23,25}\.[A-Za-z0-9_\-]{6}\.[A-Za-z0-9_\-]{27,38})\b'
+    secret_group: 1
+    tags: [chat, saas]
+    examples:
+      positive:
+        - 'DISCORD_BOT_TOKEN=MTk4NjIyNDgzNDcxOTI1MjQ4.Cl2FMQ.ZnCjm1XVW7vRze4b7Cq4se7kKWs'
+      negative:
+        - 'discord webhook id 198622483471925248'
+
+  # -------------------------------------------------------------- Tokens ----
+  - id: jwt
+    description: JSON Web Token
+    severity: medium
+    confidence: medium
+    keywords: ['eyj']
+    regex: '\b(eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,})'
+    secret_group: 1
+    validator: jwt
+    tags: [token, auth]
+    examples:
+      positive:
+        - 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk'
+      negative:
+        - 'eyJhbGciOiJIUzI1NiJ9.notajwt'
+
+  - id: authorization-basic-header
+    description: HTTP Basic authorization header with embedded credentials
+    severity: high
+    confidence: medium
+    keywords: [basic ]
+    regex: '(?i)authorization["\x27]?\s*[:=]\s*["\x27]?basic\s+([A-Za-z0-9+/]{16,}={0,2})'
+    secret_group: 1
+    entropy_threshold: 3.5
+    tags: [token, auth, http]
+    examples:
+      positive:
+        - 'Authorization: Basic YWRtaW46a1I3bVF6Mlh2TmI4TGNZdDRXcEo='
+      negative:
+        - 'Authorization: Basic <base64 of user:password>'
+
+  - id: authorization-bearer-header
+    description: HTTP Bearer authorization header with a long opaque token
+    severity: high
+    confidence: low
+    keywords: [bearer ]
+    regex: '(?i)authorization["\x27]?\s*[:=]\s*["\x27]?bearer\s+([A-Za-z0-9._\-~+/]{24,})'
+    secret_group: 1
+    entropy_threshold: 4.0
+    tags: [token, auth, http]
+    examples:
+      positive:
+        - 'Authorization: Bearer kR7mQz2XvNb8LcYt4WpJd6SgHa1FuE3ZiOr9TpKw'
+      negative:
+        - 'Authorization: Bearer $ACCESS_TOKEN'
+
+  - id: hashicorp-vault-token
+    description: HashiCorp Vault service or batch token
+    severity: critical
+    confidence: high
+    keywords: ['hvs.', 'hvb.', 'hvr.']
+    regex: '\b(hv[sbr]\.[A-Za-z0-9_\-]{24,})'
+    secret_group: 1
+    tags: [vault, secrets]
+    examples:
+      positive:
+        - 'VAULT_TOKEN=hvs.kR7mQz2XvNb8LcYt4WpJd6SgHa1FuE3Zi'
+      negative:
+        - 'hvs.short'
+
+  # ----------------------------------------------------------- PEM keys -----
+  - id: private-key-rsa
+    description: RSA private key in PEM format
+    severity: critical
+    confidence: high
+    keywords: ['begin rsa private key']
+    regex: '-----BEGIN RSA PRIVATE KEY-----'
+    secret_group: 0
+    continuation: pem-body
+    tags: [pem, key]
+    examples:
+      positive:
+        - "-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX6Ppy1tPf9Cnzj4p4WGeKLs1Pt8Qu"
+      negative:
+        - "-----BEGIN RSA PRIVATE KEY-----\n(your key goes here)"
+        - '# the file starts with -----BEGIN RSA PRIVATE KEY-----'
+
+  - id: private-key-ec
+    description: Elliptic curve private key in PEM format
+    severity: critical
+    confidence: high
+    keywords: ['begin ec private key']
+    regex: '-----BEGIN EC PRIVATE KEY-----'
+    secret_group: 0
+    continuation: pem-body
+    tags: [pem, key]
+    examples:
+      positive:
+        - "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIJ8KsBpOvZ3dCbmTOTRWlRt2mFm5YTGr0vLZq2RhWvTQoAoGCCqGSM49"
+      negative:
+        - "-----BEGIN EC PRIVATE KEY-----\n(your key goes here)"
+        - '# the file starts with -----BEGIN EC PRIVATE KEY-----'
+
+  - id: private-key-dsa
+    description: DSA private key in PEM format
+    severity: critical
+    confidence: high
+    keywords: ['begin dsa private key']
+    regex: '-----BEGIN DSA PRIVATE KEY-----'
+    secret_group: 0
+    continuation: pem-body
+    tags: [pem, key]
+    examples:
+      positive:
+        - "-----BEGIN DSA PRIVATE KEY-----\nMIIBuwIBAAKBgQCg7fWLmVIoLcO8Wr3JjPk4V4YtKgNfR7bQ2uZxHmEiTsAVpWdC"
+      negative:
+        - "-----BEGIN DSA PRIVATE KEY-----\n(your key goes here)"
+        - '# the file starts with -----BEGIN DSA PRIVATE KEY-----'
+
+  - id: private-key-openssh
+    description: OpenSSH private key
+    severity: critical
+    confidence: high
+    keywords: ['begin openssh private key']
+    regex: '-----BEGIN OPENSSH PRIVATE KEY-----'
+    secret_group: 0
+    continuation: pem-body
+    tags: [pem, key, ssh]
+    examples:
+      positive:
+        - "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtz"
+      negative:
+        - "-----BEGIN OPENSSH PRIVATE KEY-----\n(your key goes here)"
+        - '# the file starts with -----BEGIN OPENSSH PRIVATE KEY-----'
+
+  - id: private-key-pgp
+    description: PGP private key block
+    severity: critical
+    confidence: high
+    keywords: ['begin pgp private key']
+    regex: '-----BEGIN PGP PRIVATE KEY BLOCK-----'
+    secret_group: 0
+    continuation: pem-body
+    tags: [pem, key, pgp]
+    examples:
+      positive:
+        - "-----BEGIN PGP PRIVATE KEY BLOCK-----\nlQOYBGVtQm4BCADKq8Z2rNpLvT9WmEhYc4XbFuJoGiRsAdPkVnQwZeTyMxBiHrLu"
+      negative:
+        - "-----BEGIN PGP PRIVATE KEY BLOCK-----\n(your key goes here)"
+        - '# the file starts with -----BEGIN PGP PRIVATE KEY BLOCK-----'
+
+  - id: private-key-pkcs8
+    description: PKCS#8 private key in PEM format
+    severity: critical
+    confidence: high
+    keywords: ['begin private key', 'begin encrypted private key']
+    regex: '-----BEGIN (?:ENCRYPTED )?PRIVATE KEY-----'
+    secret_group: 0
+    continuation: pem-body
+    tags: [pem, key]
+    examples:
+      positive:
+        - "-----BEGIN ENCRYPTED PRIVATE KEY-----\nMIIFDjBABgkqhkiG9w0BBQ0wMzAbBgkqhkiG9w0BBQwwDgQI6kZQ2XvNb8ICAggA"
+        - "-----BEGIN PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED"
+      negative:
+        - "-----BEGIN PRIVATE KEY-----\n(redacted)"
+        - '-----BEGIN PUBLIC KEY-----'
+
+  - id: ssh-passphrase-in-config
+    description: SSH or PEM passphrase recorded in a configuration file
+    severity: high
+    confidence: medium
+    keywords: [passphrase]
+    regex: '(?i)\b(?:ssh|ssl|tls|pem|key|identity)[_.\-]?pass(?:phrase)?\s*[:=]\s*["\x27]?([^"\x27\s#]{6,})'
+    secret_group: 1
+    entropy_threshold: 2.8
+    tags: [ssh, config]
+    examples:
+      positive:
+        - 'ssh_passphrase = kR7mQz2XvNb8LcYt'
+      negative:
+        - 'ssh_passphrase = ${SSH_PASSPHRASE}'
+
+  # ------------------------------------------------- Connection strings -----
+  - id: postgres-connection-uri
+    description: PostgreSQL connection URI with an inline password
+    severity: critical
+    confidence: high
+    keywords: ['postgres://', 'postgresql://']
+    regex: '\bpostgres(?:ql)?://[A-Za-z0-9._%+\-]+:([^@\s/"\x27]{4,})@[A-Za-z0-9.\-]+'
+    secret_group: 1
+    tags: [database, uri]
+    examples:
+      positive:
+        - 'DATABASE_URL=postgres://app:kR7mQz2XvNb8@db.internal:5432/prod'
+      negative:
+        - 'DATABASE_URL=postgres://app:${DB_PASSWORD}@db.internal:5432/prod'
+
+  - id: mysql-connection-uri
+    description: MySQL connection URI with an inline password
+    severity: critical
+    confidence: high
+    keywords: ['mysql://', 'mariadb://']
+    regex: '\b(?:mysql|mariadb)://[A-Za-z0-9._%+\-]+:([^@\s/"\x27]{4,})@[A-Za-z0-9.\-]+'
+    secret_group: 1
+    tags: [database, uri]
+    examples:
+      positive:
+        - 'mysql://root:kR7mQz2XvNb8@127.0.0.1:3306/app'
+      negative:
+        - 'mysql://root:password@localhost/app'
+
+  - id: mongodb-connection-uri
+    description: MongoDB connection URI with an inline password
+    severity: critical
+    confidence: high
+    keywords: ['mongodb://', 'mongodb+srv://']
+    regex: '\bmongodb(?:\+srv)?://[A-Za-z0-9._%+\-]+:([^@\s/"\x27]{4,})@[A-Za-z0-9.\-]+'
+    secret_group: 1
+    tags: [database, uri]
+    examples:
+      positive:
+        - 'mongodb+srv://svc:kR7mQz2XvNb8@cluster0.f8j2k.mongodb.net/prod'
+      negative:
+        - 'mongodb://user:<password>@localhost:27017'
+
+  - id: redis-connection-uri
+    description: Redis connection URI with an inline password
+    severity: high
+    confidence: high
+    keywords: ['redis://', 'rediss://']
+    regex: '\brediss?://[A-Za-z0-9._%+\-]*:([^@\s/"\x27]{4,})@[A-Za-z0-9.\-]+'
+    secret_group: 1
+    tags: [database, uri]
+    examples:
+      positive:
+        - 'REDIS_URL=redis://default:kR7mQz2XvNb8@cache.internal:6379/0'
+      negative:
+        - 'REDIS_URL=redis://cache.internal:6379/0'
+
+  - id: amqp-connection-uri
+    description: AMQP connection URI with an inline password
+    severity: high
+    confidence: high
+    keywords: ['amqp://', 'amqps://']
+    regex: '\bamqps?://[A-Za-z0-9._%+\-]+:([^@\s/"\x27]{4,})@[A-Za-z0-9.\-]+'
+    secret_group: 1
+    tags: [queue, uri]
+    examples:
+      positive:
+        - 'amqps://svc:kR7mQz2XvNb8@rabbit.internal:5671/%2f'
+      negative:
+        - 'amqp://svc:${RABBIT_PASSWORD}@rabbit.internal:5671/'
+
+  # --------------------------------------------------------------- Azure ----
+  - id: azure-storage-account-key
+    description: Azure Storage account key in a connection string
+    severity: critical
+    confidence: high
+    keywords: [accountkey=]
+    regex: '(?i)AccountKey\s*=\s*([A-Za-z0-9+/]{86}==)'
+    secret_group: 1
+    tags: [azure, cloud]
+    examples:
+      positive:
+        - 'DefaultEndpointsProtocol=https;AccountName=prod;AccountKey=29mT/7KMB4mJItPY/ZLFSmdwEqhBAfdPOmHVWcvKUsEQfLWNCaRoa23y2/xVO7vn3YQxWK+K6DydXXGhMg7mZl=='
+      negative:
+        - 'AccountKey=<your-account-key>'
+
+  - id: azure-ad-client-secret
+    description: Azure AD application client secret
+    severity: critical
+    confidence: high
+    keywords: ['q~']
+    regex: '\b([A-Za-z0-9_~.\-]{3}[0-9]Q~[A-Za-z0-9_~.\-]{31,34})\b'
+    secret_group: 1
+    tags: [azure, cloud, oauth]
+    examples:
+      positive:
+        - 'AZURE_CLIENT_SECRET=aB18Q~kR7mQz2XvNb8LcYt4WpJd6SgHa1FuE3Z'
+      negative:
+        - 'AZURE_CLIENT_SECRET=<client-secret>'
+
+  - id: azure-sas-token
+    description: Azure shared access signature token
+    severity: high
+    confidence: medium
+    keywords: ['sig=']
+    regex: '(?i)[?&]sig=([A-Za-z0-9%+/]{40,}(?:%3D|=){1,2})'
+    secret_group: 1
+    entropy_threshold: 3.8
+    tags: [azure, cloud]
+    examples:
+      positive:
+        - 'https://prod.blob.core.windows.net/c/b?sv=2021-08-06&sig=kR7mQz2XvNb8LcYt4WpJd6SgHa1FuE3ZiOr9TpKwLmXb%3D'
+      negative:
+        - 'https://example.com/?sig=SIGNATURE_PLACEHOLDER'
+
+  # ------------------------------------------------------------ Registries --
+  - id: npm-access-token
+    description: npm access token
+    severity: critical
+    confidence: high
+    keywords: [npm_]
+    regex: '\b(npm_[A-Za-z0-9]{36})\b'
+    secret_group: 1
+    tags: [registry, npm]
+    examples:
+      positive:
+        - '//registry.npmjs.org/:_authToken=npm_atvrB5cSghOkqTQtEwDyO0WPBbqV1RKIFAMW'
+      negative:
+        - '_authToken=npm_TOKEN'
+
+  - id: pypi-upload-token
+    description: PyPI upload token
+    severity: critical
+    confidence: high
+    keywords: ['pypi-ageichlwas5vcmc']
+    regex: '\b(pypi-AgEIcHlwaS5vcmc[A-Za-z0-9_\-]{50,})\b'
+    secret_group: 1
+    tags: [registry, pypi]
+    examples:
+      positive:
+        - 'password = pypi-AgEIcHlwaS5vcmckR7mQz2XvNb8LcYt4WpJd6SgHa1FuE3ZiOr9TpKwLmXbVzNcQdRfYgUhIjOk'
+      negative:
+        - 'password = pypi-TOKEN'
+
+  - id: dockerhub-personal-access-token
+    description: Docker Hub personal access token
+    severity: high
+    confidence: high
+    keywords: [dckr_pat_]
+    regex: '\b(dckr_pat_[A-Za-z0-9_\-]{27})\b'
+    secret_group: 1
+    tags: [registry, docker]
+    examples:
+      positive:
+        - 'DOCKER_TOKEN=dckr_pat_WpxuEa2YfK14nsJNODpRBfzQ4st'
+      negative:
+        - 'dckr_pat_short'
+
+  - id: docker-config-auth
+    description: Base64 registry credentials in a Docker config auths block
+    severity: high
+    confidence: medium
+    keywords: ['"auths"', '"auth"']
+    regex: '"auth"\s*:\s*"([A-Za-z0-9+/]{16,}={0,2})"'
+    secret_group: 1
+    entropy_threshold: 3.5
+    tags: [registry, docker]
+    examples:
+      positive:
+        - '{"auths":{"registry.io":{"auth":"YWRtaW46a1I3bVF6Mlh2TmI4TGNZdDRXcEo="}}}'
+      negative:
+        - '{"auths":{"registry.io":{"auth":""}}}'
+
+  # ------------------------------------------------------------- Other SaaS -
+  - id: digitalocean-pat
+    description: DigitalOcean personal access token
+    severity: critical
+    confidence: high
+    keywords: [dop_v1_, doo_v1_, dor_v1_]
+    regex: '\b(do[opr]_v1_[a-f0-9]{64})\b'
+    secret_group: 1
+    tags: [cloud, saas]
+    examples:
+      positive:
+        - 'DO_TOKEN=dop_v1_3f9a1c7e5b2d8460af13ce92b7d045e6c81af2393f9a1c7e5b2d8460af13ce92'
+      negative:
+        - 'dop_v1_short'
+
+  - id: heroku-api-key
+    description: Heroku API key
+    severity: high
+    confidence: medium
+    keywords: [heroku]
+    regex: '(?i)heroku[a-z_\-]{0,20}["\x27 ]*[:=]["\x27 ]*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})'
+    secret_group: 1
+    tags: [cloud, saas]
+    examples:
+      positive:
+        - 'HEROKU_API_KEY=3f9a1c7e-5b2d-8460-af13-ce92b7d045e6'
+      negative:
+        - 'heroku app id is not a secret'
+
+  - id: cloudflare-api-token
+    description: Cloudflare API token
+    severity: high
+    confidence: medium
+    keywords: [cloudflare, cf_api]
+    regex: '(?i)(?:cloudflare|cf)[a-z_\-]{0,20}(?:token|key)["\x27 ]*[:=]["\x27 ]*["\x27]?([A-Za-z0-9_\-]{37,44})'
+    secret_group: 1
+    entropy_threshold: 3.8
+    tags: [cloud, saas]
+    examples:
+      positive:
+        - 'CLOUDFLARE_API_TOKEN=kR7mQz2XvNb8LcYt4WpJd6SgHa1FuE3ZiOr9T'
+      negative:
+        - 'CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}'
+
+  - id: shopify-access-token
+    description: Shopify app or private access token
+    severity: critical
+    confidence: high
+    keywords: [shpat_, shpca_, shppa_, shpss_]
+    regex: '\b(shp(?:at|ca|pa|ss)_[a-fA-F0-9]{32})\b'
+    secret_group: 1
+    tags: [saas, ecommerce]
+    examples:
+      positive:
+        - 'SHOPIFY_TOKEN=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'
+      negative:
+        - 'shpat_short'
+
+  - id: square-access-token
+    description: Square access token
+    severity: critical
+    confidence: high
+    keywords: [sq0atp-, sq0csp-]
+    regex: '\b(sq0(?:atp|csp)-[A-Za-z0-9_\-]{22,43})\b'
+    secret_group: 1
+    tags: [payments, saas]
+    examples:
+      positive:
+        - 'SQUARE_TOKEN=sq0atp-kR7mQz2XvNb8LcYt4WpJd6'
+      negative:
+        - 'sq0atp-short'
+
+  - id: datadog-api-key
+    description: Datadog API or application key
+    severity: high
+    confidence: medium
+    keywords: [datadog, dd_api, dd_app]
+    regex: '(?i)(?:datadog|dd)[a-z_\-]{0,12}(?:api|app)[_\-]?key["\x27 ]*[:=]["\x27 ]*["\x27]?([a-f0-9]{32,40})'
+    secret_group: 1
+    entropy_threshold: 3.2
+    tags: [observability, saas]
+    examples:
+      positive:
+        - 'DD_API_KEY=3f9a1c7e5b2d8460af13ce92b7d045e6'
+      negative:
+        - 'DD_API_KEY=00000000000000000000000000000000'
+
+  - id: newrelic-user-key
+    description: New Relic user API key
+    severity: high
+    confidence: high
+    keywords: [nrak-, nrji-]
+    regex: '\b(NR(?:AK|JI)-[A-Z0-9]{27})\b'
+    secret_group: 1
+    tags: [observability, saas]
+    examples:
+      positive:
+        - 'NEW_RELIC_API_KEY=NRAK-KR7MQZ2XVNB8LCYT4WPJD6SGHA1'
+      negative:
+        - 'NRAK-short'
+
+  - id: sentry-dsn-with-secret
+    description: Sentry DSN containing a client secret
+    severity: medium
+    confidence: high
+    keywords: [sentry.io, '@o']
+    regex: '(https://[a-f0-9]{32}:[a-f0-9]{32}@[a-z0-9.\-]*sentry\.io/[0-9]+)'
+    secret_group: 1
+    tags: [observability, saas]
+    examples:
+      positive:
+        - 'SENTRY_DSN=https://3f9a1c7e5b2d8460af13ce92b7d045e6:c81af2393f9a1c7e5b2d8460af13ce92@o1234.ingest.sentry.io/5678'
+      negative:
+        - 'SENTRY_DSN=https://3f9a1c7e5b2d8460af13ce92b7d045e6@o1234.ingest.sentry.io/5678'
+
+  - id: algolia-admin-key
+    description: Algolia admin API key
+    severity: high
+    confidence: medium
+    keywords: [algolia]
+    regex: '(?i)algolia[a-z_\-]{0,20}(?:admin|api)[_\-]?key["\x27 ]*[:=]["\x27 ]*["\x27]?([a-f0-9]{32})'
+    secret_group: 1
+    entropy_threshold: 3.2
+    tags: [saas, search]
+    examples:
+      positive:
+        - 'ALGOLIA_ADMIN_KEY=3f9a1c7e5b2d8460af13ce92b7d045e6'
+      negative:
+        - 'ALGOLIA_ADMIN_KEY=YOUR_ADMIN_KEY_HERE'
+
+  # ----------------------------------------------------------- Generic ------
+  - id: generic-env-secret
+    description: Environment-style assignment whose name looks like a secret
+    severity: medium
+    confidence: medium
+    keywords: [secret, token, password, passwd, apikey, api_key, access_key, private_key, credential]
+    # The name must be SHOUTING_SNAKE: this rule is about .env files and
+    # shell exports. Mixed-case assignments are a different shape and are
+    # covered, with a much higher entropy bar, by generic-assignment-secret.
+    regex: '(?m)^\s*(?:export\s+)?[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|APIKEY|API_KEY|ACCESS_KEY|PRIVATE_KEY|CREDENTIAL)[A-Z0-9_]*\s*=\s*["\x27]?([^"\x27\s#]{12,})'
+    secret_group: 1
+    entropy_threshold: 3.5
+    tags: [generic, env]
+    examples:
+      positive:
+        - 'SERVICE_API_TOKEN=kR7mQz2XvNb8LcYt4WpJd6Sg'
+      negative:
+        - 'SERVICE_API_TOKEN=$SERVICE_API_TOKEN'
+        - 'SERVICE_API_TOKEN=your-api-key-here'
+
+  - id: generic-assignment-secret
+    description: Code assignment of a high-entropy literal to a secret-like name
+    severity: medium
+    confidence: low
+    keywords: [secret, token, password, passwd, apikey, api_key, credential, auth_key]
+    regex: '(?i)\b(?:secret|token|password|passwd|api[_\-]?key|credential|auth[_\-]?key)[A-Za-z0-9_]*["\x27]?\s*[:=]\s*["\x27]([^"\x27\s]{16,})["\x27]'
+    secret_group: 1
+    entropy_threshold: 4.0
+    tags: [generic, code]
+    examples:
+      positive:
+        - 'const apiKey = "kR7mQz2XvNb8LcYt4WpJd6SgHa1F"'
+      negative:
+        - 'const apiKey = "aaaaaaaaaaaaaaaaaaaaaaaa"'
+        - 'const apiKey = process.env.API_KEY'

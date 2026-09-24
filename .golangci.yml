@@ -1,0 +1,41 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - gosec
+    - staticcheck
+    - revive
+    - ineffassign
+    - unused
+    - misspell
+  settings:
+    gosec:
+      excludes:
+        # G101 flags our own rule catalogue and test fixtures as "hardcoded
+        # credentials". Every literal in this repo is a synthetic sample.
+        - G101
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: indent-error-flow
+        - name: errorf
+        - name: context-as-argument
+  exclusions:
+    generated: lax
+    rules:
+      - path: _test\.go$
+        linters: [gosec, errcheck, revive]
+      - path: testdata/
+        linters: [gosec, revive, staticcheck, misspell]
+
+formatters:
+  enable:
+    - gofmt
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

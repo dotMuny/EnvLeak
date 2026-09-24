@@ -1,0 +1,13 @@
+{
+  "comment": "Fixture payloads. Every value here is fabricated.",
+  "jwt": "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.",
+  "aws": {
+    "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+    "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+  },
+  "github_token": "ghp_0000000000000000000000000000000000",
+  "stripe": "sk_test_0000000000000000000000000",
+  "docker": { "auths": { "registry.example.com": { "auth": "" } } },
+  "integrity": "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "commit": "0000000000000000000000000000000000000000"
+}

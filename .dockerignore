@@ -1,0 +1,7 @@
+bin/
+dist/
+.git/
+testdata/repo/
+coverage.out
+coverage.html
+*.sarif

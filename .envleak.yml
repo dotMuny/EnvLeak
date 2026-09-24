@@ -1,0 +1,64 @@
+# .envleak.yml — envleak's configuration for this repository.
+#
+# Everything here is optional: envleak works with no config file at all. This
+# file doubles as the documented example, and internal/config asserts that it
+# parses, so it can never drift out of date.
+version: 1
+
+# Skip files above this size. Secrets are short; a 40 MB file is a dump or a
+# vendored blob. Accepts a number of bytes or a human size.
+max_file_size: 1MB
+
+# Worker goroutines. 0 means one per CPU.
+concurrency: 0
+
+# Exit 1 when a finding is at least this severe: critical | high | medium | low | none.
+fail_on: medium
+
+# Drop findings below this confidence before reporting: high | medium | low.
+min_confidence: low
+
+entropy:
+  # The standalone high-entropy detector, for secrets with no fixed format.
+  enabled: true
+  # Bits per character required. Base64 carries ~6 bits per symbol, hex 4, so
+  # they need different bars — see "Design decisions" in the README.
+  base64: 4.5
+  hex: 3.0
+  # Shorter strings are sampling noise rather than entropy.
+  min_length: 20
+  # Only score lines that also mention a secret-ish word. Turning this off
+  # (or passing --entropy-all) reports every commit hash in the repository.
+  contextual: true
+
+allowlist:
+  # gitignore-style globs; matching files are never opened.
+  #
+  # This project is a secret scanner, so its own source is full of synthetic
+  # credentials on purpose: the rule catalogue's examples, the corpora, the
+  # test fixtures, the demo script and the documentation. All of them are
+  # fabricated and none were ever valid — see SECURITY.md. Everything else in
+  # the repository is scanned normally, including in CI, which is the point of
+  # listing them individually rather than switching rules off.
+  paths:
+    - "testdata/**"              # the adversarial and synthetic-history corpora
+    - "internal/rules/rules.yaml" # each rule's positive examples
+    - "internal/testcorpus/**"    # the synthetic repository builder
+    - "**/*_test.go"              # test fixtures
+    - "hack/mkdemo.py"            # the demo script plants secrets in a temp repo
+    - "docs/**"                   # generated rule reference and the demo SVG
+    - "README.md"                 # documented examples
+    - "**/*.min.js"
+  # Full regexes matched against the same repo-relative path.
+  path_regexes: []
+  # Rule ids to switch off entirely. `envleak rules` lists them.
+  rules: []
+  # Regexes matched against the secret value; a hit is allowed through.
+  regexes: []
+  # Accepted finding fingerprints — an inline baseline. `envleak baseline`
+  # writes a separate file instead, which is usually easier to review.
+  fingerprints: []
+
+# Extra rule files merged on top of the embedded catalogue. Same YAML shape as
+# internal/rules/rules.yaml; an id that already exists overrides the built-in.
+extra_rules: []

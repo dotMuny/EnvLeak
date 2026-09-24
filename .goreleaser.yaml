@@ -1,0 +1,129 @@
+# goreleaser configuration.
+#
+# Six platform/architecture combinations, all static: CGO is off everywhere, so
+# a single build matrix covers Linux, macOS and Windows with no cross-compiler.
+version: 2
+
+project_name: envleak
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./... -count=1
+
+builds:
+  - id: envleak
+    main: ./cmd/envleak
+    binary: envleak
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/dotMuny/EnvLeak/internal/buildinfo.Version={{ .Version }}
+      - -X github.com/dotMuny/EnvLeak/internal/buildinfo.Commit={{ .ShortCommit }}
+      - -X github.com/dotMuny/EnvLeak/internal/buildinfo.Date={{ .CommitDate }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - LICENSE
+      - docs/*
+      - .envleak.yml
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+sboms:
+  - artifacts: archive
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Detection
+      regexp: '(?i)^.*(rule|detect|entropy|validator|false.positive)'
+      order: 0
+    - title: Features
+      regexp: '(?i)^.*(add|feat|support)'
+      order: 1
+    - title: Fixes
+      regexp: '(?i)^.*(fix|bug)'
+      order: 2
+    - title: Other
+      order: 99
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+brews:
+  - name: envleak
+    repository:
+      owner: dotMuny
+      name: homebrew-tap
+    homepage: https://github.com/dotMuny/EnvLeak
+    description: Find leaked secrets in a Git repository's working tree and history
+    license: MIT
+    test: |
+      system "#{bin}/envleak", "version"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/dotmuny/envleak:{{ .Version }}-amd64"
+      - "ghcr.io/dotmuny/envleak:latest-amd64"
+    dockerfile: Dockerfile
+    use: buildx
+    goarch: amd64
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--build-arg=VERSION={{ .Version }}"
+      - "--build-arg=COMMIT={{ .ShortCommit }}"
+      - "--build-arg=DATE={{ .CommitDate }}"
+  - image_templates:
+      - "ghcr.io/dotmuny/envleak:{{ .Version }}-arm64"
+      - "ghcr.io/dotmuny/envleak:latest-arm64"
+    dockerfile: Dockerfile
+    use: buildx
+    goarch: arm64
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=VERSION={{ .Version }}"
+      - "--build-arg=COMMIT={{ .ShortCommit }}"
+      - "--build-arg=DATE={{ .CommitDate }}"
+
+docker_manifests:
+  - name_template: "ghcr.io/dotmuny/envleak:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/dotmuny/envleak:{{ .Version }}-amd64"
+      - "ghcr.io/dotmuny/envleak:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/dotmuny/envleak:latest"
+    image_templates:
+      - "ghcr.io/dotmuny/envleak:latest-amd64"
+      - "ghcr.io/dotmuny/envleak:latest-arm64"
+
+release:
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Verifying a download
+
+    ```sh
+    sha256sum -c checksums.txt --ignore-missing
+    ```

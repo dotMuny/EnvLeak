@@ -1,0 +1,25 @@
+# Hooks for the pre-commit framework (https://pre-commit.com).
+#
+# Add to your .pre-commit-config.yaml:
+#
+#   repos:
+#     - repo: https://github.com/dotMuny/EnvLeak
+#       rev: v0.1.0
+#       hooks:
+#         - id: envleak
+#
+- id: envleak
+  name: envleak (scan staged files for secrets)
+  description: Block a commit that would introduce a leaked credential.
+  entry: envleak scan --staged --no-color
+  language: golang
+  pass_filenames: false
+  always_run: true
+
+- id: envleak-strict
+  name: envleak (strict)
+  description: As above, but fails on any finding, including low severity ones.
+  entry: envleak scan --staged --no-color --fail-on low
+  language: golang
+  pass_filenames: false
+  always_run: true

@@ -1,0 +1,7 @@
+/bin/
+/dist/
+/coverage.out
+/coverage.html
+*.test
+.envleak-baseline.json
+/testdata/repo/
