@@ -73,16 +73,26 @@ changelog:
       - "^test:"
       - "^chore:"
 
-brews:
-  - name: envleak
-    repository:
-      owner: dotMuny
-      name: homebrew-tap
-    homepage: https://github.com/dotMuny/EnvLeak
-    description: Find leaked secrets in a Git repository's working tree and history
-    license: MIT
-    test: |
-      system "#{bin}/envleak", "version"
+# Homebrew is deliberately not published.
+#
+# A tap costs a second repository (dotMuny/homebrew-tap) and a HOMEBREW_TAP_TOKEN
+# secret with write access to it, because the GITHUB_TOKEN that Actions provides
+# can only write to the repository it runs in. That is not worth maintaining
+# until somebody asks for it: go install, the release binaries and the container
+# image already cover every platform.
+#
+# To enable it later: create the tap repository, add the secret, and restore:
+#
+#   brews:
+#     - name: envleak
+#       repository:
+#         owner: dotMuny
+#         name: homebrew-tap
+#       homepage: https://github.com/dotMuny/EnvLeak
+#       description: Find leaked secrets in a Git repository's working tree and history
+#       license: MIT
+#       test: |
+#         system "#{bin}/envleak", "version"
 
 dockers:
   - image_templates:

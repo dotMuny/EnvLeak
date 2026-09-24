@@ -44,10 +44,6 @@ go install github.com/dotMuny/EnvLeak/cmd/envleak@latest
 ```
 
 ```bash
-brew install dotMuny/tap/envleak
-```
-
-```bash
 docker run --rm -v "$PWD:/repo:ro" ghcr.io/dotmuny/envleak:latest scan /repo
 ```
 
